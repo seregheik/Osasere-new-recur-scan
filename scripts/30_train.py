@@ -22,12 +22,21 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_selection import RFECV
 from sklearn.metrics import confusion_matrix, f1_score, precision_score, recall_score
-from sklearn.model_selection import GridSearchCV, GroupKFold, RandomizedSearchCV, train_test_split
+from sklearn.model_selection import (
+    GridSearchCV,
+    GroupKFold,
+    RandomizedSearchCV,
+    train_test_split,
+)
 from tqdm import tqdm
 
 from recur_scan.features import get_features
 from recur_scan.features_original import get_new_features
-from recur_scan.transactions import group_transactions, read_labeled_transactions, write_transactions
+from recur_scan.transactions import (
+    group_transactions,
+    read_labeled_transactions,
+    write_transactions,
+)
 
 # %%
 # configure the script
@@ -40,15 +49,20 @@ search_type = "random"  # "grid" or "random"
 n_hpo_iters = 200  # number of hyperparameter optimization iterations
 n_jobs = -1  # number of jobs to run in parallel (set to 1 if your laptop gets too hot)
 
-in_path = "training file"
-precomputed_features_path = "precomputed features file"
-out_dir = "output directory"
+in_path = "../../../../../Osasere/Downloads/recur_scan_train - train.csv"
+precomputed_features_path = "../../../../Downloads/Compressed/train_features.csv/train_features.csv"
+out_dir = "../../recur-scan-data/"
 
 # %%
 # parse script arguments from command line
 parser = argparse.ArgumentParser(description="Train a model to identify recurring transactions.")
 parser.add_argument("--f", help="ignore; used by ipykernel_launcher")
-parser.add_argument("--input", type=str, default=in_path, help="Path to the input CSV file containing transactions.")
+parser.add_argument(
+    "--input",
+    type=str,
+    default=in_path,
+    help="Path to the input CSV file containing transactions.",
+)
 parser.add_argument(
     "--use_precomputed_features",
     type=bool,
@@ -103,7 +117,10 @@ else:
     # Use backend that works better with shared memory
     with joblib.parallel_backend("loky", n_jobs=n_jobs):
         features = joblib.Parallel(verbose=1)(
-            joblib.delayed(get_features)(transaction, grouped_transactions[(transaction.user_id, transaction.name)])
+            joblib.delayed(get_features)(
+                transaction,
+                grouped_transactions[(transaction.user_id, transaction.name)],
+            )
             for transaction in tqdm(transactions, desc="Processing transactions")
         )
     # save the features to a csv file
@@ -173,7 +190,13 @@ if do_hyperparameter_optimization:
         search = GridSearchCV(model, param_dist, cv=cv, scoring="f1", n_jobs=n_jobs, verbose=3)
     else:
         search = RandomizedSearchCV(
-            model, param_dist, n_iter=n_hpo_iters, cv=cv, scoring="f1", n_jobs=n_jobs, verbose=3
+            model,
+            param_dist,
+            n_iter=n_hpo_iters,
+            cv=cv,
+            scoring="f1",
+            n_jobs=n_jobs,
+            verbose=3,
         )
     print(f"Searching for best hyperparameters for {model_type} with {search_type} search")
     search.fit(X_hpo, y, groups=user_ids)
@@ -416,7 +439,11 @@ for feature in eliminated_features:
 
 # Plot the CV scores vs number of features
 plt.figure(figsize=(10, 6))
-plt.plot(range(1, len(rfecv.cv_results_["mean_test_score"]) + 1), rfecv.cv_results_["mean_test_score"], "o-")
+plt.plot(
+    range(1, len(rfecv.cv_results_["mean_test_score"]) + 1),
+    rfecv.cv_results_["mean_test_score"],
+    "o-",
+)
 plt.xlabel("Number of features")
 plt.ylabel("Cross-validation accuracy")
 plt.title("Accuracy vs. Number of Features")
