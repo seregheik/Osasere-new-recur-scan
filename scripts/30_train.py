@@ -51,7 +51,7 @@ search_type = "random"  # "grid" or "random"
 n_hpo_iters = 200  # number of hyperparameter optimization iterations
 n_jobs = -1  # number of jobs to run in parallel (set to 1 if your laptop gets too hot)
 
-in_path = "../../../../../Osasere/Downloads/recur_scan_train - train.csv"
+in_path = "../../../../../Osasere/Downloads/recur_scan_train - train .csv"
 precomputed_features_path = "../../../../Downloads/Compressed/train_features.csv/train_features.csv"
 out_dir = "../../recur-scan-data/"
 

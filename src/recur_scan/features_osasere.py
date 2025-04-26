@@ -166,16 +166,14 @@ def detect_installment_payments(
         "quadpay",
         "zip",
     ]
+    # Get all transactions from the same vendor
+    vendor_txs = [t for t in all_transactions if t.name.lower() == transaction.name.lower()]
+    # Installment payments typically have at least 2 payments
+    if len(vendor_txs) < 2:
+        return False
 
     # Check if transaction is from an installment service
     if not any(service in transaction.name.lower() for service in installment_services):
-        return False
-
-    # Get all transactions from the same vendor
-    vendor_txs = [t for t in all_transactions if t.name.lower() == transaction.name.lower()]
-
-    # Installment payments typically have at least 2 payments
-    if len(vendor_txs) < 2:
         return False
 
     # Analyze date patterns - installments often happen every 2-4 weeks
@@ -313,10 +311,12 @@ def normalize_vendor_name(name: str) -> str:
     name = name.lower()
 
     # Remove common suffixes
+
     suffixes = [" apa", " llc", " inc", " corp", " co", " ltd"]
     for suffix in suffixes:
-        if name.endswith(suffix):
-            name = name[: -len(suffix)]
+        index = name.find(suffix)
+        if index != -1:
+            name = name[:index]
 
     # Remove phone numbers and location details in common formats
     name = re.sub(r"\s+\d{3}-\d{3}-\d{4}\s+.*", "", name)
@@ -329,6 +329,10 @@ def normalize_vendor_name(name: str) -> str:
 
     # Remove city and state patterns
     name = re.sub(r"\s+[A-Za-z]+\s+[A-Z]{2}.*", "", name)
+
+    # Remove special characters and all text after them
+    name = re.split(r"[^\w\s]", name)[0]
+    name = re.sub(r"\s+", " ", name)  # Replace multiple spaces with a single space
 
     # Remove extra spaces
     name = " ".join(name.split())
@@ -401,6 +405,440 @@ def detect_housing_payments(
     return False
 
 
+# newer features
+
+
+# def get_amount_consistency(
+#     transaction: Transaction,
+#     all_transactions: list[Transaction],
+#     tolerance_percent: float = 0.05,
+# ) -> float:
+#     """
+#     Calculate the fraction of transactions from the same vendor with similar amounts.
+
+#     Args:
+#         transaction: The transaction to check
+#         all_transactions: List of all transactions to analyze
+#         tolerance_percent: The percentage difference allowed for amount matching
+
+#     Returns:
+#         Fraction of transactions with consistent amounts (0.0-1.0)
+#     """
+#     vendor_txs = [
+#         t for t in all_transactions if t.name.lower() == transaction.name.lower()
+#     ]
+#     if len(vendor_txs) < 2:
+#         return 0.0
+
+#     target_amount = transaction.amount
+#     matches = 0
+
+#     for t in vendor_txs:
+#         # Calculate percentage difference
+#         if target_amount == 0:
+#             continue
+#         percent_diff = abs(t.amount - target_amount) / target_amount
+#         if percent_diff <= tolerance_percent:
+#             matches += 1
+
+#     return matches / len(vendor_txs)
+
+
+def detect_streaming_services(transaction: Transaction) -> bool:
+    """
+    Detects if the transaction is from a common streaming service.
+
+    Args:
+        transaction: The transaction to check
+
+    Returns:
+        True if it's a streaming service, False otherwise
+    """
+    streaming_services = [
+        "netflix",
+        "hulu",
+        "disney+",
+        "disney plus",
+        "hbo max",
+        "paramount+",
+        "peacock",
+        "apple tv",
+        "amazon prime video",
+        "youtube premium",
+        "spotify",
+        "pandora",
+        "tidal",
+        "apple music",
+        "amazon music",
+        "deezer",
+        "youtube music",
+        "amazon kids+",
+    ]
+
+    return any(service in transaction.name.lower() for service in streaming_services)
+
+
+def detect_insurance_payments(transaction: Transaction) -> bool:
+    """
+    Detects if the transaction is an insurance payment.
+
+    Args:
+        transaction: The transaction to check
+
+    Returns:
+        True if it's an insurance payment, False otherwise
+    """
+    insurance_keywords = [
+        "insurance",
+        "geico",
+        "progressive",
+        "allstate",
+        "state farm",
+        "farmers",
+        "liberty mutual",
+        "nationwide",
+        "root insurance",
+        "national general",
+        "usaa",
+    ]
+
+    return any(keyword in transaction.name.lower() for keyword in insurance_keywords)
+
+
+# def detect_subscription_box(transaction: Transaction) -> bool:
+#     """
+#     Detects if the transaction is a subscription box service.
+
+#     Args:
+#         transaction: The transaction to check
+
+#     Returns:
+#         True if it's a subscription box, False otherwise
+#     """
+#     subscription_keywords = [
+#         "box",
+#         "crate",
+#         "club",
+#         "walmart+",
+#         "amazon prime",
+#         "membership",
+#         "subscription",
+#     ]
+
+#     return any(keyword in transaction.name.lower() for keyword in subscription_keywords)
+
+
+# def get_date_pattern_consistency(
+#     transaction: Transaction, all_transactions: list[Transaction]
+# ) -> float:
+#     """
+#     Analyze if the transaction follows common subscription patterns (monthly, quarterly, etc).
+
+#     Args:
+#         transaction: The transaction to check
+#         all_transactions: List of all transactions to analyze
+
+#     Returns:
+#         Score representing how well transaction fits subscription patterns (0.0-1.0)
+#     """
+#     vendor_txs = [
+#         t for t in all_transactions if t.name.lower() == transaction.name.lower()
+#     ]
+#     if len(vendor_txs) < 3:
+#         return 0.0
+
+#     dates = sorted([parse_date(t.date) for t in vendor_txs])
+#     day_diffs = [(dates[i] - dates[i - 1]).days for i in range(1, len(dates))]
+
+#     # Common subscription intervals (days)
+#     patterns = {
+#         "monthly": (25, 35),  # ~30 days
+#         "bi-monthly": (55, 65),  # ~60 days
+#         "quarterly": (85, 95),  # ~90 days
+#         "biweekly": (12, 16),  # ~14 days
+#         "weekly": (5, 9),  # ~7 days
+#         "annual": (350, 380),  # ~365 days
+#     }
+
+#     # Check if day differences match any pattern
+#     matches = 0
+#     for diff in day_diffs:
+#         for interval_range in patterns.values():
+#             if interval_range[0] <= diff <= interval_range[1]:
+#                 matches += 1
+#                 break
+
+#     return matches / len(day_diffs) if day_diffs else 0.0
+
+
+# def detect_utility_payments(transaction: Transaction) -> bool:
+#     """
+#     Detects if the transaction is a utility payment.
+
+#     Args:
+#         transaction: The transaction to check
+
+#     Returns:
+#         True if it's a utility payment, False otherwise
+#     """
+#     utility_keywords = [
+#         "electric",
+#         "water",
+#         "gas",
+#         "power",
+#         "utility",
+#         "utilities",
+#         "energy",
+#         "sewage",
+#         "waste",
+#         "ngrid",
+#         "national grid",
+#         "pg&e",
+#         "duke energy",
+#         "con edison",
+#         "xcel",
+#     ]
+
+#     return any(keyword in transaction.name.lower() for keyword in utility_keywords)
+
+
+# def detect_lending_services(transaction: Transaction) -> bool:
+#     """
+#     Detects if the transaction is from a lending service.
+
+#     Args:
+#         transaction: The transaction to check
+
+#     Returns:
+#         True if it's a lending service payment, False otherwise
+#     """
+#     lending_keywords = [
+#         "loan",
+#         "lending",
+#         "kikoff",
+#         "credit",
+#         "borrowing",
+#         "payment",
+#         "finance",
+#         "leasing",
+#         "cleo",
+#     ]
+
+#     return any(keyword in transaction.name.lower() for keyword in lending_keywords)
+
+
+# def get_future_transactions_count(
+#     transaction: Transaction, all_transactions: list[Transaction]
+# ) -> int:
+#     """
+#     Count how many transactions from the same vendor occur after this one.
+
+#     Args:
+#         transaction: The transaction to check
+#         all_transactions: List of all transactions to analyze
+
+#     Returns:
+#         Number of future transactions from same vendor
+#     """
+#     tx_date = parse_date(transaction.date)
+
+#     future_count = 0
+#     for t in all_transactions:
+#         if t.name.lower() == transaction.name.lower() and parse_date(t.date) > tx_date:
+#             future_count += 1
+
+#     return future_count
+
+
+# def is_common_misclassified_merchant(transaction: Transaction) -> bool:
+#     """
+#     Identifies merchants that are commonly misclassified in the dataset.
+
+#     Args:
+#         transaction: The transaction to check
+
+#     Returns:
+#         True if this is a merchant that's commonly misclassified
+#     """
+#     problem_merchants = [
+#         "planet fitness",
+#         "hulu",
+#         "earnin",
+#         "walmart+",
+#         "music & arts",
+#         "ngrid",
+#         "root insurance",
+#     ]
+
+#     return any(
+#         merchant.lower() in transaction.name.lower() for merchant in problem_merchants
+#     )
+
+
+def is_likely_recurring_by_merchant(transaction: Transaction) -> bool:
+    """
+    Identifies merchants that are almost always recurring subscriptions.
+
+    Args:
+        transaction: The transaction to check
+
+    Returns:
+        True if this merchant is likely to be a recurring subscription
+    """
+    recurring_merchants = [
+        "kikoff",
+        "albert",
+        "amazon kids+",
+        "amazon music",
+        "microsoft xbox",
+        "apple",
+        "floatme",
+        "sezzle",
+    ]
+
+    return any(merchant.lower() in transaction.name.lower() for merchant in recurring_merchants)
+
+
+def has_consistent_amount(
+    transaction: Transaction,
+    all_transactions: list[Transaction],
+    exact_match: bool = True,
+) -> bool:
+    """
+    Checks if this transaction has the same amount as other transactions from the same merchant.
+
+    Args:
+        transaction: The transaction to check
+        all_transactions: List of all transactions to analyze
+        exact_match: Whether to require exact match or allow small variance
+
+    Returns:
+        True if the amount is consistent with other transactions from this merchant
+    """
+    merchant_txs = [t for t in all_transactions if t.name.lower() == transaction.name.lower()]
+    if len(merchant_txs) <= 1:
+        return False
+
+    target_amount = transaction.amount
+    matches = 0
+    total = 0
+
+    for t in merchant_txs:
+        if t.id != transaction.id:  # Skip comparing to self
+            total += 1
+            if (exact_match and t.amount == target_amount) or (
+                not exact_match and abs(t.amount - target_amount) / max(t.amount, target_amount) < 0.05
+            ):
+                matches += 1
+
+    return matches >= total * 0.75  # 75% or more match
+
+
+# def is_round_number_amount(transaction: Transaction) -> bool:
+#     """
+#     Checks if the transaction amount is a round number (often indicates recurring).
+
+#     Args:
+#         transaction: The transaction to check
+
+#     Returns:
+#         True if the amount is a round number
+#     """
+#     amount = transaction.amount
+#     return amount == int(amount) or amount * 100 == int(amount * 100)
+
+
+# def is_likely_one_time_by_amount(transaction: Transaction) -> bool:
+#     """
+#     Checks if the transaction amount suggests a one-time payment rather than recurring.
+
+#     Args:
+#         transaction: The transaction to check
+
+#     Returns:
+#         True if the amount suggests a one-time payment
+#     """
+#     # Large, uneven amounts are often one-time payments
+#     return transaction.amount > 100 and not is_round_number_amount(transaction)
+
+
+def has_regular_interval(
+    transaction: Transaction,
+    all_transactions: list[Transaction],
+    max_variance_days: int = 5,
+) -> bool:
+    """
+    Checks if transactions from this merchant occur at regular intervals.
+
+    Args:
+        transaction: The transaction to check
+        all_transactions: List of all transactions to analyze
+        max_variance_days: Maximum allowed variance in days between intervals
+
+    Returns:
+        True if transactions occur at regular intervals
+    """
+    merchant_txs = [t for t in all_transactions if t.name.lower() == transaction.name.lower()]
+    if len(merchant_txs) < 3:
+        return False
+
+    dates = sorted([parse_date(t.date) for t in merchant_txs])
+    intervals = [(dates[i] - dates[i - 1]).days for i in range(1, len(dates))]
+
+    if not intervals:
+        return False
+
+    avg_interval = sum(intervals) / len(intervals)
+    # Check if all intervals are within max_variance_days of the average
+    return all(abs(interval - avg_interval) <= max_variance_days for interval in intervals)
+
+
+# def simple_classifier(
+#     transaction: Transaction, all_transactions: list[Transaction]
+# ) -> int:
+#     """
+#     A simple rule-based classifier to determine if a transaction is recurring.
+
+#     Args:
+#         transaction: The transaction to check
+#         all_transactions: List of all transactions to analyze
+
+#     Returns:
+#         1 if transaction is recurring, 0 if not recurring
+#     """
+#     # First, check if it's a merchant we know is typically recurring
+#     if is_likely_recurring_by_merchant(transaction):
+#         return 1
+
+#     # Next, check if it's a merchant that's often misclassified
+#     if is_common_misclassified_merchant(transaction):
+#         # For common misclassified merchants, use stricter criteria
+#         if has_consistent_amount(
+#             transaction, all_transactions
+#         ) and has_regular_interval(transaction, all_transactions):
+#             return 1
+#         else:
+#             return 0
+
+#     # For other transactions, use a combination of features
+#     recurring_signals = 0
+
+#     if has_consistent_amount(transaction, all_transactions, exact_match=True):
+#         recurring_signals += 2
+
+#     if has_regular_interval(transaction, all_transactions):
+#         recurring_signals += 2
+
+#     if is_round_number_amount(transaction):
+#         recurring_signals += 1
+
+#     if is_likely_one_time_by_amount(transaction):
+#         recurring_signals -= 2
+
+#     # Return 1 (recurring) if we have enough signals, otherwise 0 (not recurring)
+#     return 1 if recurring_signals >= 2 else 0
+
+
 def get_new_features(
     transaction: Transaction,
     all_transactions: list[Transaction],
@@ -418,4 +856,22 @@ def get_new_features(
         # "is_insurance_payment_O": detect_insurance_payments(
         #     transaction, all_transactions
         # ),
+        # "amount_consistency": get_amount_consistency(transaction, all_transactions),
+        "is_streaming_service": detect_streaming_services(transaction),
+        "is_insurance_payment": detect_insurance_payments(transaction),
+        # "is_subscription_box": detect_subscription_box(transaction),
+        # "date_pattern_consistency": get_date_pattern_consistency(
+        #     transaction, all_transactions
+        # ),
+        # "is_utility_payment": detect_utility_payments(transaction),
+        # "is_lending_service": detect_lending_services(transaction),
+        # "future_transactions_count": get_future_transactions_count(
+        #     transaction, all_transactions
+        # ),
+        "is_recurring_merchant": is_likely_recurring_by_merchant(transaction),
+        # "is_problem_merchant": is_common_misclassified_merchant(transaction),
+        "has_consistent_amount": has_consistent_amount(transaction, all_transactions),
+        # "is_round_number": is_round_number_amount(transaction),
+        "has_regular_interval": has_regular_interval(transaction, all_transactions),
+        # "prediction": simple_classifier(transaction, all_transactions),
     }
